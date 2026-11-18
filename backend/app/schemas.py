@@ -35,6 +35,33 @@ class ActionPayload(BaseModel):
     remark: str | None = None
 
 
+class HandoverPayload(BaseModel):
+    """计划移交契约：按版本边界一次生效，支持整体刷新与逐条撤销。"""
+
+    from_team: str | None = None
+    to_team: str
+    mode: str  # 整体刷新 / 逐条撤销
+    plan_ids: list[int] = Field(default_factory=list)
+    base_version: int = 1
+
+
+class ReviewPayload(BaseModel):
+    """快照复核契约：每批仅接受一份有效结果。"""
+
+    batch_no: str
+    conclusion: str  # 可用 / 不可用
+
+
+class SnapshotPageResult(BaseModel):
+    """采集调度列表响应：分页数据之外带上团队计划快照元信息。"""
+
+    items: list[dict[str, Any]]
+    total: int
+    page: int = 1
+    size: int = 20
+    snapshot: dict[str, Any] | None = None
+
+
 
 class DatasourceEntry(BaseModel):
     """数据源明细结构。"""

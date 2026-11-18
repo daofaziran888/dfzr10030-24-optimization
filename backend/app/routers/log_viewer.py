@@ -1,4 +1,8 @@
-"""采集日志接口：维护日志条目，覆盖开始处理、标记已处理、忽略日志等动作。"""
+"""采集日志接口：维护日志条目，覆盖开始处理、标记已处理、忽略日志等动作。
+
+排期链路扩展：待审核工作台（快照复核事项）、复核结论提交；
+越权拒绝记录留在日志列表里，可按日志类型筛选。
+"""
 from __future__ import annotations
 
 import csv
@@ -7,14 +11,15 @@ import io
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from app.schemas import ActionPayload, ActionResult, EntryPayload, PageResult
+from app.schemas import ActionPayload, ActionResult, PageResult, ReviewPayload
+from app.security import get_context
 from app.services.log_viewer import LogViewerService
 
 router = APIRouter(prefix="/api/log_viewer", tags=["采集日志"])
 
 service = LogViewerService()
 
-LIST_FIELDS = ["日志编号", "关联任务", "日志级别", "记录时间", "日志内容", "错误堆栈", "处理状态", "处理人"]
+LIST_FIELDS = ["日志编号", "关联任务", "日志级别", "记录时间", "日志内容", "错误堆栈", "处理状态", "处理人", "日志类型", "团队编号"]
 STATUSES = ["未处理", "处理中", "已处理", "已忽略"]
 
 
@@ -25,6 +30,22 @@ def query_filters(request: Request) -> dict[str, str]:
         for key, value in request.query_params.items()
         if key in LIST_FIELDS and value.strip()
     }
+
+
+@router.get("/workbench")
+def workbench(
+    status: str | None = Query(default="待审核", description="工作台事项状态，缺省看待审核"),
+) -> dict:
+    """待审核工作台项：团队计划快照同步写入后生成的复核事项。"""
+    return {"items": service.workbench(status)}
+
+
+@router.post("/review", response_model=ActionResult)
+def review(payload: ReviewPayload, request: Request) -> ActionResult:
+    """复核团队计划快照批次：每批仅一份有效结果，结论同步给采集调度。"""
+    ok, message = service.review_snapshot(
+        payload.batch_no.strip(), payload.conclusion.strip(), get_context(request))
+    return ActionResult(ok=ok, message=message)
 
 
 @router.get("", response_model=PageResult[dict])
@@ -51,7 +72,7 @@ def export_entries(
     items, _ = service.list_entries(
         filters=query_filters(request), keyword=keyword, status=status, page=1, size=1000000)
     output = io.StringIO()
-    output.write("\ufeff")
+    output.write("﻿")
     writer = csv.writer(output, lineterminator="\n")
     writer.writerow(["id", *LIST_FIELDS, "status"])
     for item in items:

@@ -8,6 +8,9 @@ from typing import Any
 
 from app.seed import SEED_ROWS
 
+# 团队计划快照链路的内部表：支撑受控读取与复核，不按业务模块口径对外展示。
+INTERNAL_MODULES = {"team_shift", "team_snapshot", "ownership_change", "review_batch", "workbench_item"}
+
 
 class Store:
     def __init__(self) -> None:
@@ -30,6 +33,8 @@ class Store:
     def overview(self) -> dict[str, object]:
         modules: list[dict[str, object]] = []
         for name in self.module_names():
+            if name in INTERNAL_MODULES:
+                continue
             rows = self.rows(name)
             modules.append({
                 "name": name,
